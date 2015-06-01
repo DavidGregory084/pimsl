@@ -27,14 +27,17 @@ import scala.language.higherKinds
  *
  * An arrow may simply be a Scala function but could also be a
  * functor object (see [[pimsl.Arrow.Kleisli]]).
- *
- * A minimal implementation requires `arr`, `first` and `sequence`.
  */
 trait Arrow[F[_, _], TC[_]] {
   /**
    * Lifts a function A => B into an arrow F[A, B]
    */
   def arr[A, B](f: A => B): F[A, B]
+
+  /**
+   * Lifts a function A => TC[B] into an arrow F[A, B].
+   */
+  def kleisli[A, B](f: A => TC[B]): F[A, B]
 
   /**
    * Sequences an arrow F[A, B] with an arrow F[B, C] to
@@ -90,11 +93,6 @@ trait Arrow[F[_, _], TC[_]] {
    * Run the arrow F[A, B] using input A to return a TC[B].
    */
   def apply[A, B](f: F[A, B])(a: A): TC[B]
-
-  /**
-   * Lifts the function A => TC[B] into an arrow F[A, B].
-   */
-  def kleisli[A, B](f: A => TC[B]): F[A, B]
 }
 
 object Arrow {
@@ -187,6 +185,8 @@ object Arrow {
   implicit val function1Arrow = new Arrow[Function1, Id] {
     final def arr[A, B](f: A => B) = f
 
+    final def kleisli[A, B](f: A => Id[B]): A => B = f
+
     final def sequence[A, B, C](f: A => B, g: B => C) = g compose f
 
     final def first[A, B, C](f: A => B) = product(f, identity[C])
@@ -195,8 +195,6 @@ object Arrow {
       (t: (A, C)) => (f(t._1), g(t._2))
 
     final def apply[A, B](f: A => B)(a: A): Id[B] = f(a)
-
-    final def kleisli[A, B](f: A => Id[B]): A => B = f
   }
 
   /**
@@ -218,7 +216,9 @@ object Arrow {
       private val monad = implicitly[Monad[TC]]
 
       final def arr[A, B](f: A => B): KleisliTC[A, B] =
-        Kleisli { (a: A) => monad.map(monad.unit(a))(f) }
+        Kleisli { (a: A) => monad.unit(f(a)) }
+
+      final def kleisli[A, B](f: A => TC[B]): KleisliTC[A, B] = Kleisli(f)
 
       final def sequence[A, B, C](f: KleisliTC[A, B], g: KleisliTC[B, C]): KleisliTC[A, C] =
         Kleisli { (a: A) => monad.flatMap(f(a))(g(_)) }
@@ -229,8 +229,6 @@ object Arrow {
         }
 
       final def apply[A, B](f: KleisliTC[A, B])(a: A): TC[B] = f(a)
-
-      final def kleisli[A, B](f: A => TC[B]): KleisliTC[A, B] = Kleisli(f)
     }
   }
 
