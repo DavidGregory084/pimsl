@@ -148,6 +148,13 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
     (listInit >>> listAddTwo &&& listAddOne)(0) shouldBe List((2, 1), (2, 1), (2, 1))
   }
 
+  it should "apply an associative monadic operation using <+>" in {
+    val listOfTwos = (listInit >>> listAddTwo >>> listDivTwo)
+    val listOfThrees = (listInit >>> listAddTwo >>> listAddTwo >>> listDivTwo)
+
+    (listOfTwos <+> listOfThrees)(2) shouldBe List(2, 2, 2, 3, 3, 3)
+  }
+
   it should "be usable with for comprehensions using -<" in {
     val proc: Int => List[Int] = x => for {
       y <- listInit -< x

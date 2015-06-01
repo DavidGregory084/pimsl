@@ -6,7 +6,7 @@
 ## Usage
 
 ### Arrows
-**pimsl** offers a limited and possibly flawed implementation of [John Hughes' Arrows](http://www.cse.chalmers.se/~rjmh/Papers/arrows.pdf) in Scala, including compatibility with sequence comprehensions in a way that imitates Haskell's `proc` notation:
+**pimsl** offers a limited implementation of [John Hughes' Arrows](http://www.cse.chalmers.se/~rjmh/Papers/arrows.pdf) in Scala, including compatibility with sequence comprehensions in a way that imitates Haskell's `proc` notation:
 
 ```scala
 scala> import pimsl.Arrow._

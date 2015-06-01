@@ -95,10 +95,22 @@ trait Arrow[F[_, _], TC[_]] {
   def apply[A, B](f: F[A, B])(a: A): TC[B]
 }
 
+trait ArrowPlus[F[_, _], TC[_]] {
+  /**
+   * An identity value for arrows F[A, B]
+   */
+  def zero[A, B]: F[A, B]
+
+  /**
+   * An associative operation on arrows F[A, B]
+   */
+  def plus[A, B](l: F[A, B], r: F[A, B]): F[A, B]
+}
+
 object Arrow {
   /**
-   * Identity type to support polymorphic return values in the
-   * `flatMap` operation.
+   * Identity type to support polymorphic return values as output
+   * from an arrow.
    */
   type Id[A] = A
 
@@ -180,6 +192,17 @@ object Arrow {
   }
 
   /**
+   *  Provides an infix version of [[pimsl.ArrowPlus]].plus over
+   *  arrow instances.
+   */
+  implicit class ArrowPlusOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: ArrowPlus[F, TC]) {
+    /**
+     * Applies an associative binary operation onto `this` and an arrow F[A, B]
+     */
+    def <+>(g: F[A, B]): F[A, B] = arrow.plus(f, g)
+  }
+
+  /**
    * Type class instance witnessing that Function1 is an Arrow.
    */
   implicit val function1Arrow = new Arrow[Function1, Id] {
@@ -232,5 +255,17 @@ object Arrow {
     }
   }
 
+  implicit def kleisliArrowPlus[TC[_]: MonadPlus]: ArrowPlus[({ type f[x, y] = Kleisli[x, y, TC] })#f, TC] = {
+    type KleisliTC[A, B] = Kleisli[A, B, TC]
+
+    new ArrowPlus[KleisliTC, TC] {
+      private val monad = implicitly[MonadPlus[TC]]
+
+      def zero[A, B]: KleisliTC[A, B] = Kleisli { _ => monad.zero }
+
+      def plus[A, B](l: KleisliTC[A, B], r: KleisliTC[A, B]): KleisliTC[A, B] =
+        Kleisli { (a: A) => monad.plus(l(a), r(a)) }
+    }
+  }
 }
 
