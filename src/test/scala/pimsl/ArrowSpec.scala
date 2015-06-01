@@ -83,6 +83,36 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
     proc((0, 0)) shouldBe ((1, 2), (0, 2), 3)
   }
 
+  it should "follow the arrow laws" in {
+    val a = implicitly[Arrow[Function1, Id]]
+    val f: Int => Int = a => a + 10
+    val g: Int => Int = a => a * 2
+    def assoc[A, B, C](t: ((A, B), C)): (A, (B, C)) =
+      (t._1._1, (t._1._2, t._2))
+
+    forAll { (i: Int, t: (Int, Int), nt: Tuple2[(Int, Int), Int]) =>
+      a.arr(identity[Int])(i) shouldBe identity[Int](i)
+
+      a.arr(f >>> g)(i) shouldBe (a.arr(f) >>> a.arr(g))(i)
+
+      a.arr(f).first(t) shouldBe a.arr(f.first[Int])(t)
+
+      (f >>> g).first(t) shouldBe (f.first[Int] >>> g.first)(t)
+
+      (f.first >>> a.arr((tp: (Int, Int)) => tp._1))(t) shouldBe {
+        (a.arr((tp: (Int, Int)) => tp._1) >>> f)(t)
+      }
+
+      (f.first >>> a.arr(identity[Int] _ *** g))(t) shouldBe {
+        (a.arr(identity[Int] _ *** g) >>> f.first)(t)
+      }
+
+      (f.first.first >>> a.arr((tp: Tuple2[(Int, Int), Int]) => assoc(tp)))(nt) shouldBe {
+        (a.arr((tp: Tuple2[(Int, Int), Int]) => assoc(tp)) >>> f.first)(nt)
+      }
+    }
+  }
+
   type KleisliList[A, B] = Kleisli[A, B, List]
   val listInit: KleisliList[Int, Int] = Kleisli((i: Int) => List(i, i, i))
   val listTupleInit: KleisliList[(Int, Int), (Int, Int)] = Kleisli((t: (Int, Int)) => List(t))
@@ -90,7 +120,7 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
   val listAddTwo: KleisliList[Int, Int] = Kleisli((i: Int) => List(i + 2))
   val listDivTwo: KleisliList[Int, Int] = Kleisli((i: Int) => List(i / 2))
 
-  "The Kleisli List arrow" should "sequence monads using >>>" in {
+  "The Kleisli arrow" should "sequence monads using >>>" in {
     (listInit >>> listAddTwo >>> listAddTwo >>> listDivTwo)(2) shouldBe List(3, 3, 3)
   }
 
@@ -159,12 +189,49 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
   }
 
   it should "allow complex arrows within a generator" in {
-    val proc: ((Int, Int)) => List[((Int, Int), (Int, Int))] =
+    val proc: ((Int, Int)) => List[((Int, Int), (Int, Int), Int)] =
       (t: (Int, Int)) => for {
         x <- (listAddOne *** listAddTwo <<< listTupleInit) -< t
         y <- (listAddTwo.second <<< listTupleInit) -< t
-      } yield (x, y)
+        z <- (listAddTwo <<< listInit) -< x._1
+      } yield (x, y, z)
 
-    proc((0, 0)) shouldBe List(((1, 2), (0, 2)))
+    proc((0, 0)) shouldBe List(((1, 2), (0, 2), 3), ((1, 2), (0, 2), 3), ((1, 2), (0, 2), 3))
+  }
+
+  it should "follow the arrow laws" in {
+    type KleisliOpt[A, B] = Kleisli[A, B, Option]
+    val a = implicitly[Arrow[KleisliOpt, Option]]
+    val f: KleisliOpt[Int, Int] = Kleisli((i: Int) => Some(i + 10))
+    val g: KleisliOpt[Int, Int] = Kleisli((i: Int) => Some(i * 2))
+    val id: Int => Option[Int] = (i: Int) => Some(identity[Int](i))
+    def assoc[A, B, C](t: ((A, B), C)): (A, (B, C)) =
+      (t._1._1, (t._1._2, t._2))
+
+    forAll { (i: Int, t: (Int, Int), nt: Tuple2[(Int, Int), Int]) =>
+      a.kleisli(id)(i) shouldBe id(i)
+
+      a.kleisli((j: Int) => (f >>> g)(j))(i) shouldBe {
+        (a.kleisli((k: Int) => f(k)) >>> a.kleisli(l => g(l)))(i)
+      }
+
+      a.kleisli((j: Int) => f(j)).first(t) shouldBe {
+        a.kleisli((u: (Int, Int)) => f.first[Int](u))(t)
+      }
+
+      (f >>> g).first(t) shouldBe (f.first[Int] >>> g.first)(t)
+
+      (f.first >>> a.arr((tp: (Int, Int)) => tp._1))(t) shouldBe {
+        (a.arr((tp: (Int, Int)) => tp._1) >>> f)(t)
+      }
+
+      (f.first >>> a.kleisli((tp: (Int, Int)) => (a.kleisli(id) *** g)(tp)))(t) shouldBe {
+        (a.kleisli((tp: (Int, Int)) => (a.kleisli(id) *** g)(tp)) >>> f.first)(t)
+      }
+
+      (f.first.first >>> a.arr((tp: Tuple2[(Int, Int), Int]) => assoc(tp)))(nt) shouldBe {
+        (a.arr((tp: Tuple2[(Int, Int), Int]) => assoc(tp)) >>> f.first)(nt)
+      }
+    }
   }
 }
