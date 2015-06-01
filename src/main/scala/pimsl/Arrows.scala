@@ -30,7 +30,7 @@ import scala.language.higherKinds
  *
  * A minimal implementation requires `arr`, `first` and `sequence`.
  */
-trait Arrow[F[_, _]] {
+trait Arrow[F[_, _], TC[_]] {
   /**
    * Lifts a function A => B into an arrow F[A, B]
    */
@@ -85,17 +85,12 @@ trait Arrow[F[_, _]] {
       second[B, A, C](g)
     )
   }
-}
 
-/**
- * A trait representing polymorphic functions on an arrow F[A, B]
- * which takes A as input and returns a TC[B].
- */
-trait >->[F[_, _], TC[_]] {
   /**
    * Run the arrow F[A, B] using input A to return a TC[B].
    */
   def apply[A, B](f: F[A, B])(a: A): TC[B]
+
   /**
    * Lifts the function A => TC[B] into an arrow F[A, B].
    */
@@ -124,7 +119,7 @@ object Arrow {
    * }}}
    *
    */
-  class ArrowSyntax[A, B, F[_, _], TC[_]](f: F[A, B], a: A)(implicit arrow: Arrow[F] with (F >-> TC)) {
+  class ArrowSyntax[A, B, F[_, _], TC[_]](f: F[A, B], a: A)(implicit arrow: Arrow[F, TC]) {
     final def map[C](g: B => C): TC[C] = arrow(f >>> arrow.arr(g))(a)
     final def flatMap[C](g: B => TC[C]): TC[C] = arrow(f >>> arrow.kleisli(g))(a)
   }
@@ -136,7 +131,7 @@ object Arrow {
    *  Also provides an operator `-<` to feed input into an arrow
    *  within sequence comprehensions.
    */
-  implicit class ArrowOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: Arrow[F] with (F >-> TC)) {
+  implicit class ArrowOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: Arrow[F, TC]) {
     /**
      * Sequences `this` with an arrow F[B, C] to
      * produce a new arrow F[A, C].
@@ -189,7 +184,7 @@ object Arrow {
   /**
    * Type class instance witnessing that Function1 is an Arrow.
    */
-  implicit val function1Arrow = new Arrow[Function1] with (Function1 >-> Id) {
+  implicit val function1Arrow = new Arrow[Function1, Id] {
     final def arr[A, B](f: A => B) = f
 
     final def sequence[A, B, C](f: A => B, g: B => C) = g compose f
@@ -216,10 +211,10 @@ object Arrow {
    * Type class instance witnessing that any [[pimsl.Monad]][TC]
    * is an arrow via the operation A => TC[B].
    */
-  implicit def kleisliArrow[TC[_]: Monad]: Arrow[({ type f[x, y] = Kleisli[x, y, TC] })#f] with (({ type f[x, y] = Kleisli[x, y, TC] })#f >-> TC) = {
+  implicit def kleisliArrow[TC[_]: Monad]: Arrow[({ type f[x, y] = Kleisli[x, y, TC] })#f, TC] = {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
-    new Arrow[KleisliTC] with (KleisliTC >-> TC) {
+    new Arrow[KleisliTC, TC] {
       private val monad = implicitly[Monad[TC]]
 
       final def arr[A, B](f: A => B): KleisliTC[A, B] =
@@ -230,7 +225,7 @@ object Arrow {
 
       final def first[A, B, C](f: KleisliTC[A, B]): KleisliTC[(A, C), (B, C)] =
         Kleisli { (t: (A, C)) =>
-          monad.flatMap(f(t._1)) { (b: B) => monad.unit((b, t._2)) }
+          monad.map(f(t._1)) { (b: B) => (b, t._2) }
         }
 
       final def apply[A, B](f: KleisliTC[A, B])(a: A): TC[B] = f(a)
