@@ -95,7 +95,7 @@ trait Arrow[F[_, _], TC[_]] {
   def apply[A, B](f: F[A, B])(a: A): TC[B]
 }
 
-trait ArrowPlus[F[_, _], TC[_]] {
+trait ArrowPlus[F[_, _]] {
   /**
    * An identity value for arrows F[A, B]
    */
@@ -105,6 +105,34 @@ trait ArrowPlus[F[_, _], TC[_]] {
    * An associative operation on arrows F[A, B]
    */
   def plus[A, B](l: F[A, B], r: F[A, B]): F[A, B]
+}
+
+trait ArrowChoice[F[_, _], TC[_]] {
+  def left[A, B, C](f: F[A, B]): F[Either[A, C], Either[B, C]]
+
+  def right[A, B, C](f: F[A, B])(implicit arrow: Arrow[F, TC]): F[Either[C, A], Either[C, B]] = {
+    def mirror[A, B]: Either[A, B] => Either[B, A] = {
+      case Left(a) => Right(a)
+      case Right(a) => Left(a)
+    }
+    arrow.sequence(
+      arrow.sequence(
+        arrow.arr(mirror[C, A]), left[A, B, C](f)
+      ),
+      arrow.arr(mirror[B, C])
+    )
+  }
+
+  def split[A, B, C, D](f: F[A, B], g: F[C, D])(implicit arrow: Arrow[F, TC]): F[Either[A, C], Either[B, D]] =
+    arrow.sequence(left(f), right(g))
+
+  def fanIn[A, B, C](f: F[A, C], g: F[B, C])(implicit arrow: Arrow[F, TC]): F[Either[A, B], C] = {
+    val untag: Either[C, C] => C = {
+      case Left(c) => c
+      case Right(c) => c
+    }
+    arrow.sequence(split(f, g), arrow.arr(untag))
+  }
 }
 
 object Arrow {
@@ -195,11 +223,18 @@ object Arrow {
    *  Provides an infix version of [[pimsl.ArrowPlus]].plus over
    *  arrow instances.
    */
-  implicit class ArrowPlusOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: ArrowPlus[F, TC]) {
+  implicit class ArrowPlusOps[A, B, F[_, _]](f: F[A, B])(implicit arrow: ArrowPlus[F]) {
     /**
      * Applies an associative binary operation onto `this` and an arrow F[A, B]
      */
     def <+>(g: F[A, B]): F[A, B] = arrow.plus(f, g)
+  }
+
+  implicit class ArrowChoiceOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: Arrow[F, TC], arrowChoice: ArrowChoice[F, TC]) {
+    def left[C]: F[Either[A, C], Either[B, C]] = arrowChoice.left(f)
+    def right[C]: F[Either[C, A], Either[C, B]] = arrowChoice.right(f)
+    def +++[C, D](g: F[C, D]): F[Either[A, C], Either[B, D]] = arrowChoice.split(f, g)
+    def |||[C](g: F[C, B]): F[Either[A, C], B] = arrowChoice.fanIn(f, g)
   }
 
   /**
@@ -218,6 +253,23 @@ object Arrow {
       (t: (A, C)) => (f(t._1), g(t._2))
 
     final def apply[A, B](f: A => B)(a: A): Id[B] = f(a)
+  }
+
+  implicit val function1ArrowChoice = new ArrowChoice[Function1, Id] {
+    def left[A, B, C](f: A => B) =
+      split(f, identity[C])
+
+    override def right[A, B, C](f: A => B)(implicit arrow: Arrow[Function1, Id]) =
+      split(identity[C], f)(arrow)
+
+    override def split[A, B, C, D](f: A => B, g: C => D)(implicit arrow: Arrow[Function1, Id]) = {
+      val leftComposeF: A => Either[B, D] = a => Left(f(a))
+      val rightComposeG: C => Either[B, D] = c => Right(g(c))
+      fanIn(leftComposeF, rightComposeG)(arrow)
+    }
+
+    override def fanIn[A, B, C](f: A => C, g: B => C)(implicit arrow: Arrow[Function1, Id]) =
+      (either: Either[A, B]) => either.fold(f, g)
   }
 
   /**
@@ -255,10 +307,10 @@ object Arrow {
     }
   }
 
-  implicit def kleisliArrowPlus[TC[_]: MonadPlus]: ArrowPlus[({ type f[x, y] = Kleisli[x, y, TC] })#f, TC] = {
+  implicit def kleisliArrowPlus[TC[_]: MonadPlus]: ArrowPlus[({ type f[x, y] = Kleisli[x, y, TC] })#f] = {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
-    new ArrowPlus[KleisliTC, TC] {
+    new ArrowPlus[KleisliTC] {
       private val monad = implicitly[MonadPlus[TC]]
 
       def zero[A, B]: KleisliTC[A, B] = Kleisli { _ => monad.zero }

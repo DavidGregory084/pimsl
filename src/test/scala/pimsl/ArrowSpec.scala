@@ -241,4 +241,34 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
       }
     }
   }
+
+  "ArrowChoice" should "split two input arrows as Either to Either outputs using +++" in {
+    val intToInt: Int => String = _.toString
+    val stringToString: String => Int = _.toInt
+    (intToInt +++ stringToString)(Left(1)) shouldBe Left("1")
+    (intToInt +++ stringToString)(Right("2")) shouldBe Right(2)
+  }
+
+  it should "join two input arrows as Either with same outputs using |||" in {
+    val intToString: Int => String = _.toString
+    val stringToString: String => String = _.toUpperCase
+    (intToString ||| stringToString)(Left(1)) shouldBe "1"
+    (intToString ||| stringToString)(Right("upper")) shouldBe "UPPER"
+  }
+
+  it should "apply an arrow to the Left of an Either input arrow using left" in {
+    val intToString: Int => Int = _ * 10
+    val leftInt: Either[Int, String] = Left(1)
+    val rightString: Either[Int, String] = Right("unaltered")
+    intToString.left(leftInt) shouldBe Left(10)
+    intToString.left(rightString) shouldBe Right("unaltered")
+  }
+
+  it should "apply an arrow to the Right of an Either input arrows using right" in {
+    val stringToUpper: String => String = _.toUpperCase
+    val leftInt: Either[Int, String] = Left(1)
+    val rightString: Either[Int, String] = Right("altered")
+    stringToUpper.right(leftInt) shouldBe Left(1)
+    stringToUpper.right(rightString) shouldBe Right("ALTERED")
+  }
 }
