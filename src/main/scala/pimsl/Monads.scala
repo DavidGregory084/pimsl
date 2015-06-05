@@ -74,7 +74,7 @@ object Monad {
   implicit val optionMonad = new MonadPlus[Option] {
     def zero[A] = None
 
-    def plus[A](l: Option[A], r: Option[A]) = if (l.isDefined) l else r
+    def plus[A](l: Option[A], r: Option[A]) = l orElse r
 
     def unit[A](a: A): Some[A] = Some(a)
 

@@ -206,8 +206,8 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
     proc((0, 0)) shouldBe List(((1, 2), (0, 2), 3), ((1, 2), (0, 2), 3), ((1, 2), (0, 2), 3))
   }
 
+  type KleisliOpt[A, B] = Kleisli[A, B, Option]
   it should "follow the arrow laws" in {
-    type KleisliOpt[A, B] = Kleisli[A, B, Option]
     val a = implicitly[Arrow[KleisliOpt, Option]]
     val f: KleisliOpt[Int, Int] = Kleisli((i: Int) => Some(i + 10))
     val g: KleisliOpt[Int, Int] = Kleisli((i: Int) => Some(i * 2))
@@ -242,11 +242,11 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
     }
   }
 
-  "ArrowChoice" should "split two input arrows as Either to Either outputs using +++" in {
-    val intToInt: Int => String = _.toString
-    val stringToString: String => Int = _.toInt
-    (intToInt +++ stringToString)(Left(1)) shouldBe Left("1")
-    (intToInt +++ stringToString)(Right("2")) shouldBe Right(2)
+  "Function1 ArrowChoice" should "split two input arrows as Either to Either outputs using +++" in {
+    val intToString: Int => String = _.toString
+    val stringToInt: String => Int = _.toInt
+    (intToString +++ stringToInt)(Left(1)) shouldBe Left("1")
+    (intToString +++ stringToInt)(Right("2")) shouldBe Right(2)
   }
 
   it should "join two input arrows as Either with same outputs using |||" in {
@@ -257,11 +257,11 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
   }
 
   it should "apply an arrow to the Left of an Either input arrow using left" in {
-    val intToString: Int => Int = _ * 10
+    val intMultTen: Int => Int = _ * 10
     val leftInt: Either[Int, String] = Left(1)
     val rightString: Either[Int, String] = Right("unaltered")
-    intToString.left(leftInt) shouldBe Left(10)
-    intToString.left(rightString) shouldBe Right("unaltered")
+    intMultTen.left(leftInt) shouldBe Left(10)
+    intMultTen.left(rightString) shouldBe Right("unaltered")
   }
 
   it should "apply an arrow to the Right of an Either input arrows using right" in {
@@ -270,5 +270,35 @@ class ArrowSpec extends FlatSpec with Matchers with PropertyChecks {
     val rightString: Either[Int, String] = Right("altered")
     stringToUpper.right(leftInt) shouldBe Left(1)
     stringToUpper.right(rightString) shouldBe Right("ALTERED")
+  }
+
+  "Kleisli ArrowChoice" should "split two input arrows as Either to Either outputs using +++" in {
+    val intToString: KleisliOpt[Int, String] = Kleisli(i => Some(i.toString))
+    val stringToInt: KleisliOpt[String, Int] = Kleisli(s => Some(s.toInt))
+    (intToString +++ stringToInt)(Left(1)) shouldBe Some(Left("1"))
+    (intToString +++ stringToInt)(Right("2")) shouldBe Some(Right(2))
+  }
+
+  it should "join two input arrows as Either with same outputs using |||" in {
+    val intToString: KleisliOpt[Int, String] = Kleisli(i => Some(i.toString))
+    val stringToString: KleisliOpt[String, String] = Kleisli(s => Some(s.toUpperCase))
+    (intToString ||| stringToString)(Left(1)) shouldBe Some("1")
+    (intToString ||| stringToString)(Right("upper")) shouldBe Some("UPPER")
+  }
+
+  it should "apply an arrow to the Left of an Either input arrow using left" in {
+    val intMultTen: KleisliOpt[Int, Int] = Kleisli(i => Some(i * 10))
+    val leftInt: Either[Int, String] = Left(1)
+    val rightString: Either[Int, String] = Right("unaltered")
+    intMultTen.left(leftInt) shouldBe Some(Left(10))
+    intMultTen.left(rightString) shouldBe Some(Right("unaltered"))
+  }
+
+  it should "apply an arrow to the Right of an Either input arrows using right" in {
+    val stringToUpper: KleisliOpt[String, String] = Kleisli(s => Some(s.toUpperCase))
+    val leftInt: Either[Int, String] = Left(1)
+    val rightString: Either[Int, String] = Right("altered")
+    stringToUpper.right(leftInt) shouldBe Some(Left(1))
+    stringToUpper.right(rightString) shouldBe Some(Right("ALTERED"))
   }
 }
