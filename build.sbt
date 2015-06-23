@@ -10,3 +10,7 @@ lazy val root = (project in file(".")).
   ))
 
 scalacOptions ++= Seq("-unchecked", "-feature")
+
+resolvers += "bintray/non" at "http://dl.bintray.com/non/maven"
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.6.0")

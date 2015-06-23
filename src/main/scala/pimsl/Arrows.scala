@@ -288,7 +288,7 @@ object Arrow {
    * Type class instance witnessing that any [[pimsl.Monad]][TC]
    * is an arrow via the operation A => TC[B].
    */
-  implicit def kleisliArrow[TC[_]: Monad]: Arrow[({ type f[x, y] = Kleisli[x, y, TC] })#f, TC] = {
+  implicit def kleisliArrow[TC[_]: Monad]: Arrow[Kleisli[?, ?, TC], TC] = {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
     new Arrow[KleisliTC, TC] {
@@ -315,7 +315,7 @@ object Arrow {
    * Type class instance witnessing that any [[pimsl.MonadPlus]][TC]
    * is an arrow with an associative binary operation.
    */
-  implicit def kleisliArrowPlus[TC[_]: MonadPlus]: ArrowPlus[({ type f[x, y] = Kleisli[x, y, TC] })#f] = {
+  implicit def kleisliArrowPlus[TC[_]: MonadPlus]: ArrowPlus[Kleisli[?, ?, TC]] = {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
     new ArrowPlus[KleisliTC] {
@@ -328,7 +328,7 @@ object Arrow {
     }
   }
 
-  implicit def kleisliArrowChoice[TC[_]: Monad] = new ArrowChoice[({ type f[x, y] = Kleisli[x, y, TC] })#f, TC] {
+  implicit def kleisliArrowChoice[TC[_]: Monad] = new ArrowChoice[Kleisli[?, ?, TC], TC] {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
     protected val arrow = implicitly[Arrow[KleisliTC, TC]]

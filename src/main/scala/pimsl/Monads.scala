@@ -81,14 +81,14 @@ object Monad {
     def flatMap[A, B](option: Option[A])(f: A => Option[B]) = option flatMap f
   }
 
-  implicit def eitherLeftMonad[A] = new Monad[({ type f[x] = Either[x, A] })#f] {
+  implicit def eitherLeftMonad[A] = new Monad[Either[?, A]] {
     def unit[B](b: B) = Left(b)
 
     def flatMap[B, C](either: Either[B, A])(f: B => Either[C, A]) =
       either.left flatMap f
   }
 
-  implicit def eitherRightMonad[A] = new Monad[({ type f[x] = Either[A, x] })#f] {
+  implicit def eitherRightMonad[A] = new Monad[Either[A, ?]] {
     def unit[B](b: B) = Right(b)
 
     def flatMap[B, C](either: Either[A, B])(f: B => Either[A, C]) =
@@ -116,7 +116,7 @@ object Monad {
     def get[S]: State[S, S] = monad.get
   }
 
-  class StateMonad[S] extends Monad[({ type f[x] = State[S, x] })#f] {
+  class StateMonad[S] extends Monad[State[S, ?]] {
     def unit[A](a: A): State[S, A] = State(s => (s, a))
 
     def flatMap[A, B](state: State[S, A])(mapFunc: A => State[S, B]) = State {
