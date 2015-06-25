@@ -146,8 +146,7 @@ class MonadSpec extends FlatSpec with Matchers with PropertyChecks {
     implicit lazy val arbState: Arbitrary[State[Int, Int]] = Arbitrary(genState)
 
     forAll { (i: Int, j: Int, state: State[Int, Int]) =>
-      type StateInt[A] = State[Int, A]
-      val sm = implicitly[Monad[StateInt]]
+      val sm = implicitly[Monad[State[Int, ?]]]
 
       val inc: Int => State[Int, Unit] = a => State(s => (s + a, ()))
       val get: Int => State[Int, Int] = a => State(s => (s, s))
@@ -256,8 +255,7 @@ class MonadSpec extends FlatSpec with Matchers with PropertyChecks {
 
   "the Left Either monad" should "follow the monad laws" in {
     forAll { (i: Int, either: Either[Int, String]) =>
-      type EitherAOrString[A] = Either[A, String]
-      val lem = implicitly[Monad[EitherAOrString]]
+      val lem = implicitly[Monad[Either[?, String]]]
 
       val f1: Int => Either[Int, String] = a => Left(a + 1)
       val f2: Int => Either[Int, String] = a => Right("error")
@@ -280,8 +278,7 @@ class MonadSpec extends FlatSpec with Matchers with PropertyChecks {
 
   "the Right Either monad" should "follow the monad laws" in {
     forAll { (i: Int, either: Either[String, Int]) =>
-      type EitherStringOrA[A] = Either[String, A]
-      val rem = implicitly[Monad[EitherStringOrA]]
+      val rem = implicitly[Monad[Either[String, ?]]]
 
       val f1: Int => Either[String, Int] = a => Right(a + 1)
       val f2: Int => Either[String, Int] = a => Left("error")
