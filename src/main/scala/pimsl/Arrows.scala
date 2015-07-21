@@ -15,6 +15,7 @@
  */
 package pimsl
 
+import pimsl.Applyable._
 import pimsl.Monad._
 import scala.language.higherKinds
 
@@ -28,16 +29,11 @@ import scala.language.higherKinds
  * An arrow may simply be a Scala function but could also be a
  * functor object (see [[pimsl.Arrow.Kleisli]]).
  */
-trait Arrow[F[_, _], TC[_]] {
+trait Arrow[F[_, _]] {
   /**
    * Lifts a function A => B into an arrow F[A, B]
    */
   def arr[A, B](f: A => B): F[A, B]
-
-  /**
-   * Lifts a function A => TC[B] into an arrow F[A, B].
-   */
-  def kleisli[A, B](f: A => TC[B]): F[A, B]
 
   /**
    * Sequences an arrow F[A, B] with an arrow F[B, C] to
@@ -88,11 +84,6 @@ trait Arrow[F[_, _], TC[_]] {
       second[B, A, C](g)
     )
   }
-
-  /**
-   * Run the arrow F[A, B] using input A to return a TC[B].
-   */
-  def apply[A, B](f: F[A, B])(a: A): TC[B]
 }
 
 trait ArrowPlus[F[_, _]] {
@@ -107,8 +98,8 @@ trait ArrowPlus[F[_, _]] {
   def plus[A, B](l: F[A, B], r: F[A, B]): F[A, B]
 }
 
-trait ArrowChoice[F[_, _], TC[_]] {
-  protected val arrow: Arrow[F, TC]
+trait ArrowChoice[F[_, _]] {
+  protected val arrow: Arrow[F]
 
   def left[A, B, C](f: F[A, B]): F[Either[A, C], Either[B, C]]
 
@@ -159,9 +150,9 @@ object Arrow {
    * }}}
    *
    */
-  class ArrowSyntax[A, B, F[_, _], TC[_]](f: F[A, B], a: A)(implicit arrow: Arrow[F, TC]) {
-    final def map[C](g: B => C): TC[C] = arrow(f >>> arrow.arr(g))(a)
-    final def flatMap[C](g: B => TC[C]): TC[C] = arrow(f >>> arrow.kleisli(g))(a)
+  class ArrowForSyntax[A, B, F[_, _], TC[_]](f: F[A, B], a: A)(implicit arrow: Arrow[F], applyable: Applyable[F, TC]) {
+    final def map[C](g: B => C): TC[C] = applyable(f >>> arrow.arr(g))(a)
+    final def flatMap[C](g: B => TC[C]): TC[C] = applyable.flatten(applyable(f >>> arrow.arr(g))(a))
   }
 
   /**
@@ -171,7 +162,7 @@ object Arrow {
    *  Also provides an operator `-<` to feed input into an arrow
    *  within sequence comprehensions.
    */
-  implicit class ArrowOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: Arrow[F, TC]) {
+  implicit class ArrowOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: Arrow[F], applyable: Applyable[F, TC]) {
     /**
      * Sequences `this` with an arrow F[B, C] to
      * produce a new arrow F[A, C].
@@ -218,7 +209,7 @@ object Arrow {
      * } yield y
      * }}}
      */
-    final def -<(a: A): ArrowSyntax[A, B, F, TC] = new ArrowSyntax(f, a)
+    final def -<(a: A): ArrowForSyntax[A, B, F, TC] = new ArrowForSyntax[A, B, F, TC](f, a)
   }
 
   /**
@@ -229,23 +220,21 @@ object Arrow {
     /**
      * Applies an associative binary operation onto `this` and an arrow F[A, B]
      */
-    def <+>(g: F[A, B]): F[A, B] = arrow.plus(f, g)
+    final def <+>(g: F[A, B]): F[A, B] = arrow.plus(f, g)
   }
 
-  implicit class ArrowChoiceOps[A, B, F[_, _], TC[_]](f: F[A, B])(implicit arrow: Arrow[F, TC], arrowChoice: ArrowChoice[F, TC]) {
-    def left[C]: F[Either[A, C], Either[B, C]] = arrowChoice.left(f)
-    def right[C]: F[Either[C, A], Either[C, B]] = arrowChoice.right(f)
-    def +++[C, D](g: F[C, D]): F[Either[A, C], Either[B, D]] = arrowChoice.split(f, g)
-    def |||[C](g: F[C, B]): F[Either[A, C], B] = arrowChoice.fanIn(f, g)
+  implicit class ArrowChoiceOps[A, B, F[_, _]](f: F[A, B])(implicit arrow: Arrow[F], arrowChoice: ArrowChoice[F]) {
+    final def left[C]: F[Either[A, C], Either[B, C]] = arrowChoice.left(f)
+    final def right[C]: F[Either[C, A], Either[C, B]] = arrowChoice.right(f)
+    final def +++[C, D](g: F[C, D]): F[Either[A, C], Either[B, D]] = arrowChoice.split(f, g)
+    final def |||[C](g: F[C, B]): F[Either[A, C], B] = arrowChoice.fanIn(f, g)
   }
 
   /**
    * Type class instance witnessing that Function1 is an Arrow.
    */
-  implicit val function1Arrow = new Arrow[Function1, Id] {
+  implicit val function1Arrow = new Arrow[Function1] {
     final def arr[A, B](f: A => B) = f
-
-    final def kleisli[A, B](f: A => Id[B]): A => B = f
 
     final def sequence[A, B, C](f: A => B, g: B => C) = g compose f
 
@@ -253,12 +242,10 @@ object Arrow {
 
     final override def product[A, B, C, D](f: A => B, g: C => D) =
       (t: (A, C)) => (f(t._1), g(t._2))
-
-    final def apply[A, B](f: A => B)(a: A): Id[B] = f(a)
   }
 
-  implicit val function1ArrowChoice = new ArrowChoice[Function1, Id] {
-    protected val arrow = implicitly[Arrow[Function1, Id]]
+  implicit val function1ArrowChoice = new ArrowChoice[Function1] {
+    protected val arrow = implicitly[Arrow[Function1]]
 
     def left[A, B, C](f: A => B) =
       split(f, identity[C])
@@ -288,16 +275,14 @@ object Arrow {
    * Type class instance witnessing that any [[pimsl.Monad]][TC]
    * is an arrow via the operation A => TC[B].
    */
-  implicit def kleisliArrow[TC[_]: Monad]: Arrow[Kleisli[?, ?, TC], TC] = {
+  implicit def kleisliArrow[TC[_]: Monad]: Arrow[Kleisli[?, ?, TC]] = {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
-    new Arrow[KleisliTC, TC] {
+    new Arrow[KleisliTC] {
       private val monad = implicitly[Monad[TC]]
 
       final def arr[A, B](f: A => B): KleisliTC[A, B] =
         Kleisli { (a: A) => monad.unit(f(a)) }
-
-      final def kleisli[A, B](f: A => TC[B]): KleisliTC[A, B] = Kleisli(f)
 
       final def sequence[A, B, C](f: KleisliTC[A, B], g: KleisliTC[B, C]): KleisliTC[A, C] =
         Kleisli { (a: A) => monad.flatMap(f(a))(g(_)) }
@@ -306,8 +291,6 @@ object Arrow {
         Kleisli { (t: (A, C)) =>
           monad.map(f(t._1)) { (b: B) => (b, t._2) }
         }
-
-      final def apply[A, B](f: KleisliTC[A, B])(a: A): TC[B] = f(a)
     }
   }
 
@@ -328,10 +311,10 @@ object Arrow {
     }
   }
 
-  implicit def kleisliArrowChoice[TC[_]: Monad] = new ArrowChoice[Kleisli[?, ?, TC], TC] {
+  implicit def kleisliArrowChoice[TC[_]: Monad]: ArrowChoice[Kleisli[?, ?, TC]] = new ArrowChoice[Kleisli[?, ?, TC]] {
     type KleisliTC[A, B] = Kleisli[A, B, TC]
 
-    protected val arrow = implicitly[Arrow[KleisliTC, TC]]
+    protected val arrow = implicitly[Arrow[KleisliTC]]
 
     def left[A, B, C](f: KleisliTC[A, B]) =
       split(f, arrow.arr(identity[C]))
