@@ -36,6 +36,6 @@ object Applyable {
     protected val monad = implicitly[Monad[TC]]
 
     def apply[A, B](f: KleisliTC[A, B])(a: A): TC[B] = f(a)
-    def flatten[A](a: TC[TC[A]]): TC[A] = monad.flatMap(a)(identity)
+    def flatten[A](a: TC[TC[A]]): TC[A] = monad.join(a)
   }
 }

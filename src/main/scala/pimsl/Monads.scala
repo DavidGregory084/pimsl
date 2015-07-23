@@ -29,6 +29,8 @@ trait Monad[TC[_]] {
 
   def flatMap[A, B](tc: TC[A])(f: A => TC[B]): TC[B]
 
+  def join[A](tctc: TC[TC[A]]): TC[A] = flatMap(tctc)(identity)
+
   def traverse[A, B](ltc: List[TC[A]])(f: A => TC[B]): TC[List[B]] =
     ltc match {
       case Nil => unit(Nil)
@@ -103,6 +105,12 @@ object Monad {
     def unit[A](a: A) = Success(a)
 
     def flatMap[A, B](t: Try[A])(f: A => Try[B]) = t flatMap f
+  }
+
+  implicit def function1Monad[A] = new Monad[Function1[A, ?]] {
+    def unit[B](b: B): A => B = _ => b
+
+    def flatMap[B, C](f: A => B)(g: B => (A => C)): A => C = a => g(f(a))(a)
   }
 
   case class State[S, +A](func: S => (S, A)) {
