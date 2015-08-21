@@ -1,7 +1,7 @@
 # pimsl
 **pimsl** is a small utility library for Scala.
 
-[![Build Status](https://travis-ci.org/DavidGregory084/pimsl.svg?branch=master)](https://travis-ci.org/DavidGregory084/pimsl)
+[![Build Status](https://travis-ci.org/DavidGregory084/pimsl.svg?branch=master)](https://travis-ci.org/DavidGregory084/pimsl) [![codecov.io](http://codecov.io/github/DavidGregory084/pimsl/coverage.svg?branch=master)](http://codecov.io/github/DavidGregory084/pimsl?branch=master)
 
 ## Usage
 
